@@ -17,10 +17,6 @@
 -module(emqx_auth_username).
 
 -include("emqx_auth_username.hrl").
--include_lib("emqx/include/emqx.hrl").
-
-%% CLI callbacks
--export([cli/1]).
 
 %% APIs
 -export([ add_user/2
@@ -42,31 +38,6 @@
 -define(TAB, ?MODULE).
 
 -record(?TAB, {username, password}).
-
-%%--------------------------------------------------------------------
-%% CLI
-%%--------------------------------------------------------------------
-
-cli(["list"]) ->
-    Usernames = mnesia:dirty_all_keys(?TAB),
-    [emqx_ctl:print("~s~n", [Username]) || Username <- Usernames];
-
-cli(["add", Username, Password]) ->
-    Ok = add_user(iolist_to_binary(Username), iolist_to_binary(Password)),
-    emqx_ctl:print("~p~n", [Ok]);
-
-cli(["update", Username, NewPassword]) ->
-    Ok = update_password(iolist_to_binary(Username), iolist_to_binary(NewPassword)),
-    emqx_ctl:print("~p~n", [Ok]);
-
-cli(["del", Username]) ->
-    emqx_ctl:print("~p~n", [remove_user(iolist_to_binary(Username))]);
-
-cli(_) ->
-    emqx_ctl:usage([{"users list", "List users"},
-                    {"users add <Username> <Password>", "Add User"},
-                    {"users update <Username> <NewPassword>", "Update User"},
-                    {"users del <Username>", "Delete User"}]).
 
 %%--------------------------------------------------------------------
 %% API
@@ -165,9 +136,29 @@ encrypted_data(Password) ->
 hash(undefined, SaltBin, HashType) ->
     hash(<<>>, SaltBin, HashType);
 hash(Password, SaltBin, HashType) ->
-    emqx_passwd:hash(HashType, <<SaltBin/binary, Password/binary>>).
+    hash(HashType, <<SaltBin/binary, Password/binary>>).
 
 salt() ->
     rand:seed(exsplus, erlang:timestamp()),
     Salt = rand:uniform(16#ffffffff), <<Salt:32>>.
+
+hash(plain, Password)  ->
+    Password;
+hash(md5, Password)  ->
+    hexstring(crypto:hash(md5, Password));
+hash(sha, Password)  ->
+    hexstring(crypto:hash(sha, Password));
+hash(sha256, Password)  ->
+    hexstring(crypto:hash(sha256, Password));
+hash(sha512, Password)  ->
+    hexstring(crypto:hash(sha512, Password)).
+
+hexstring(<<X:128/big-unsigned-integer>>) ->
+    iolist_to_binary(io_lib:format("~32.16.0b", [X]));
+hexstring(<<X:160/big-unsigned-integer>>) ->
+    iolist_to_binary(io_lib:format("~40.16.0b", [X]));
+hexstring(<<X:256/big-unsigned-integer>>) ->
+    iolist_to_binary(io_lib:format("~64.16.0b", [X]));
+hexstring(<<X:512/big-unsigned-integer>>) ->
+    iolist_to_binary(io_lib:format("~128.16.0b", [X])).
 

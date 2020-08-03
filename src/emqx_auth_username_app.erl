@@ -29,7 +29,6 @@
 -export([init/1]).
 
 start(_Type, _Args) ->
-    emqx_ctl:register_command(users, {?APP, cli}, []),
     ok = emqx_auth_username:register_metrics(),
     HashType = application:get_env(?APP, password_hash, sha256),
     Params = #{hash_type => HashType},
@@ -40,7 +39,7 @@ start(_Type, _Args) ->
 
 stop(_State) ->
     emqx:unhook('client.authenticate', fun emqx_auth_username:check/3),
-    emqx_ctl:unregister_command(users).
+    ok.
 
 %%--------------------------------------------------------------------
 
